@@ -18,7 +18,27 @@
       overflow: hidden;
     }
 
-    #app {
+    #start-btn {
+      background: none;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 300;
+      letter-spacing: 0.12em;
+      padding: 1rem 2.4rem;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: border-color 0.3s, color 0.3s;
+    }
+
+    #start-btn:hover {
+      border-color: #666;
+      color: #fff;
+    }
+
+    #main-ui {
+      display: none;
       text-align: center;
       user-select: none;
     }
@@ -52,7 +72,7 @@
 
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 0.9; }
-      50% { transform: scale(1.8); opacity: 0.4; }
+      50%       { transform: scale(1.8); opacity: 0.4; }
     }
 
     #vector-debug {
@@ -65,6 +85,27 @@
       color: #444;
       font-family: "SF Mono", "Fira Code", monospace;
       white-space: nowrap;
+    }
+
+    #end-btn {
+      position: fixed;
+      bottom: 1.4rem;
+      right: 1.4rem;
+      background: none;
+      border: 1px solid #2a2a2a;
+      color: #555;
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      padding: 0.4rem 0.9rem;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    #end-btn:hover {
+      border-color: #555;
+      color: #999;
     }
 
     #connection-dot {
@@ -83,19 +124,21 @@
   </style>
 </head>
 <body>
-  <div id="app">
+
+  <button id="start-btn">start session</button>
+
+  <div id="main-ui">
     <div id="mood-label">—</div>
     <div id="pulse" class="inactive"></div>
   </div>
 
-  <div id="vector-debug"></div>
+  <div id="vector-debug">energy 0.00  ·  warmth 0.00  ·  density 0.00  ·  laughter 0.00</div>
+  <button id="end-btn">End Session</button>
   <div id="connection-dot"></div>
 
-  <!--
-    Spotify Web Playback SDK — paste your access token into player.js
-    https://developer.spotify.com/documentation/web-playback-sdk
-  -->
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
-  <script src="/player.js"></script>
+  <script src="/audio.js"></script>
+  <script src="/mood.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
