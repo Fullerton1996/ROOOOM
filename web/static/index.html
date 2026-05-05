@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Read the Room</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #app {
+      text-align: center;
+      user-select: none;
+    }
+
+    #mood-label {
+      font-size: clamp(2rem, 6vw, 5rem);
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      color: #ffffff;
+      transition: opacity 1.2s ease;
+    }
+
+    #mood-label.transitioning {
+      opacity: 0.15;
+    }
+
+    #pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      margin: 2rem auto 0;
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    #pulse.inactive {
+      background: #555;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.8); opacity: 0.4; }
+    }
+
+    #vector-debug {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      color: #444;
+      font-family: "SF Mono", "Fira Code", monospace;
+      white-space: nowrap;
+    }
+
+    #connection-dot {
+      position: fixed;
+      top: 1.2rem;
+      right: 1.2rem;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #555;
+    }
+
+    #connection-dot.connected {
+      background: #4ade80;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="mood-label">—</div>
+    <div id="pulse" class="inactive"></div>
+  </div>
+
+  <div id="vector-debug"></div>
+  <div id="connection-dot"></div>
+
+  <!--
+    Spotify Web Playback SDK — paste your access token into player.js
+    https://developer.spotify.com/documentation/web-playback-sdk
+  -->
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script src="/player.js"></script>
+</body>
+</html>
