@@ -38,8 +38,8 @@ class AudioAnalyzer {
     const rms = Math.sqrt(td.reduce((a, v) => a + v * v, 0) / td.length);
     if (rms < 1e-10) return 0;
     const db = 20 * Math.log10(rms);
-    // Wider range: -60dB (near silence) to -10dB (loud room)
-    return Math.min(1, Math.max(0, (db - (-60)) / ((-10) - (-60))));
+    // -80dB floor so ambient room noise reads 0.1–0.3, conversation 0.4–0.7, loud 0.8+
+    return Math.min(1, Math.max(0, (db - (-80)) / ((-20) - (-80))));
   }
 
   _warmth(fd) {
