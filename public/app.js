@@ -10,7 +10,8 @@
   const mainUI = document.getElementById('main-ui');
   const moodLabel = document.getElementById('mood-label');
   const pulse = document.getElementById('pulse');
-  const vectorDebug = document.getElementById('vector-debug');
+  const moodBarDot = document.getElementById('mood-bar-dot');
+  const moodZoneLabels = document.querySelectorAll('.mood-zone-label');
   const endBtn = document.getElementById('end-btn');
   const connectionDot = document.getElementById('connection-dot');
   const skipToFadeBtn = document.getElementById('skip-to-fade-btn');
@@ -268,9 +269,14 @@
     moodLabel.textContent = '—';
 
     const analyzer = new AudioAnalyzer(vector => {
-      vectorDebug.textContent =
-        `energy ${vector.energy.toFixed(2)}  ·  warmth ${vector.warmth.toFixed(2)}  ·  ` +
-        `density ${vector.density.toFixed(2)}  ·  laughter ${vector.laughter_rate.toFixed(2)}`;
+      // Move dot along the bar (0–100%)
+      if (moodBarDot) moodBarDot.style.left = `${(vector.energy * 100).toFixed(1)}%`;
+      // Highlight the active zone label
+      const activeMood = currentMood;
+      moodZoneLabels.forEach(el => {
+        const zone = el.closest('.mood-zone')?.dataset.mood;
+        el.classList.toggle('active', zone === activeMood);
+      });
       classifier.classify(vector);
     });
 

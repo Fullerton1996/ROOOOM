@@ -75,16 +75,52 @@
       50%       { transform: scale(1.8); opacity: 0.4; }
     }
 
-    #vector-debug {
+    #mood-bar-wrap {
       position: fixed;
-      bottom: 1.5rem;
+      bottom: 1.8rem;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 0.7rem;
-      letter-spacing: 0.06em;
-      color: #444;
-      font-family: "SF Mono", "Fira Code", monospace;
+      width: min(480px, 80vw);
+    }
+
+    #mood-bar-track {
+      position: relative;
+      height: 2px;
+      background: #1e1e1e;
+      border-radius: 2px;
+      display: flex;
+    }
+
+    .mood-zone {
+      height: 100%;
+      position: relative;
+    }
+
+    .mood-zone-label {
+      position: absolute;
+      top: 8px;
+      font-size: 0.6rem;
+      letter-spacing: 0.07em;
+      color: #333;
       white-space: nowrap;
+      transform: translateX(-50%);
+      left: 0;
+      transition: color 0.6s;
+    }
+
+    .mood-zone-label.active {
+      color: #aaa;
+    }
+
+    #mood-bar-dot {
+      position: absolute;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      transform: translate(-50%, -50%);
+      transition: left 2s ease;
     }
 
     #end-btn {
@@ -159,7 +195,24 @@
     <div id="pulse" class="inactive"></div>
   </div>
 
-  <div id="vector-debug">energy 0.00  ·  warmth 0.00  ·  density 0.00  ·  laughter 0.00</div>
+  <div id="mood-bar-wrap">
+    <div id="mood-bar-track">
+      <!-- zones sized by energy threshold width -->
+      <div class="mood-zone" style="width:30%" data-mood="arrival">
+        <span class="mood-zone-label" style="left:0">arrival</span>
+      </div>
+      <div class="mood-zone" style="width:20%" data-mood="warm_hum">
+        <span class="mood-zone-label" style="left:0">warm hum</span>
+      </div>
+      <div class="mood-zone" style="width:20%" data-mood="easy_flow">
+        <span class="mood-zone-label" style="left:0">easy flow</span>
+      </div>
+      <div class="mood-zone" style="width:30%" data-mood="lifted">
+        <span class="mood-zone-label" style="left:0">lifted</span>
+      </div>
+      <div id="mood-bar-dot"></div>
+    </div>
+  </div>
 
   <div id="dev-controls">
     <button id="skip-to-fade-btn">→ fade</button>
