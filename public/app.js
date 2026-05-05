@@ -133,19 +133,34 @@
     }
   }
 
+  let pendingPlaylistId = null;   // set on mood change, consumed at next track transition
+  let transitionInProgress = false;
+  let lastTrackUri = null;
+
   async function onMoodChange(mood) {
     currentMood = mood;
     moodLabel.classList.add('transitioning');
     await new Promise(r => setTimeout(r, 600));
     moodLabel.textContent = mood.replace(/_/g, ' ');
     moodLabel.classList.remove('transitioning');
+    // Queue the new playlist — it will start at the next natural track ending
+    pendingPlaylistId = extractPlaylistId(config?.moods?.[mood]?.playlist_uri);
+  }
 
-    const playlistId = extractPlaylistId(config?.moods?.[mood]?.playlist_uri);
-    if (!playlistId) return;
+  async function handleTrackEnding(timeLeftMs) {
+    if (transitionInProgress) return;
+    transitionInProgress = true;
 
-    await fadeVolume(0, 8000);
-    await startPlaylist(playlistId);
-    await fadeVolume(0.8, 8000);
+    // Fade out over whatever time is left (min 3s so it doesn't snap)
+    await fadeVolume(0, Math.max(timeLeftMs - 500, 3000));
+
+    const nextId = pendingPlaylistId || extractPlaylistId(config?.moods?.[currentMood]?.playlist_uri);
+    pendingPlaylistId = null;
+
+    if (nextId) await startPlaylist(nextId);
+
+    await fadeVolume(0.8, 4000);
+    transitionInProgress = false;
   }
 
   function logTrack(state) {
@@ -218,7 +233,25 @@
       connectionDot.classList.remove('connected');
     });
 
-    player.addListener('player_state_changed', state => { if (state) logTrack(state); });
+    player.addListener('player_state_changed', state => {
+      if (!state) return;
+      logTrack(state);
+
+      // Reset transition flag when a new track starts
+      const uri = state.track_window?.current_track?.uri;
+      if (uri && uri !== lastTrackUri) {
+        lastTrackUri = uri;
+        transitionInProgress = false;
+      }
+
+      // When a track is within 15 seconds of ending, start the crossfade
+      if (!state.paused && !transitionInProgress) {
+        const timeLeft = state.duration - state.position;
+        if (timeLeft > 0 && timeLeft < 15000) {
+          handleTrackEnding(timeLeft);
+        }
+      }
+    });
     player.addListener('initialization_error', ({ message }) => console.error('[spotify]', message));
     player.addListener('authentication_error', ({ message }) => console.error('[spotify] auth:', message));
     player.addListener('account_error', ({ message }) => console.error('[spotify] account:', message));
