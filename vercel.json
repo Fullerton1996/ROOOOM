@@ -1,3 +1,6 @@
 {
-  "framework": null
+  "framework": null,
+  "routes": [
+    { "src": "/callback", "dest": "/callback.html" }
+  ]
 }
