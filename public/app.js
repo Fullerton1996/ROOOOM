@@ -246,15 +246,18 @@
         lastTrackUri = uri;
         transitionInProgress = false;
       }
-
-      // When a track is within 15 seconds of ending, start the crossfade
-      if (!state.paused && !transitionInProgress) {
-        const timeLeft = state.duration - state.position;
-        if (timeLeft > 0 && timeLeft < 15000) {
-          handleTrackEnding(timeLeft);
-        }
-      }
     });
+
+    // player_state_changed doesn't fire on position updates, so poll every second
+    setInterval(async () => {
+      if (!player || transitionInProgress) return;
+      const state = await player.getCurrentState();
+      if (!state || state.paused) return;
+      const timeLeft = state.duration - state.position;
+      if (timeLeft > 0 && timeLeft < 15000) {
+        handleTrackEnding(timeLeft);
+      }
+    }, 1000);
     player.addListener('initialization_error', ({ message }) => console.error('[spotify]', message));
     player.addListener('authentication_error', ({ message }) => console.error('[spotify] auth:', message));
     player.addListener('account_error', ({ message }) => console.error('[spotify] account:', message));
