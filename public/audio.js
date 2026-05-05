@@ -74,11 +74,9 @@ class AudioAnalyzer {
   _laughter() {
     if (this.subWindows.length < 4) return 0;
     const mean = this.subWindows.reduce((a, b) => a + b) / this.subWindows.length;
-    if (mean < 1e-6) return 0; // true silence — no laughter possible
     const variance = this.subWindows.reduce((a, v) => a + (v - mean) ** 2, 0) / this.subWindows.length;
-    // Normalize relative to the signal level so quiet rooms still register bursts
-    const normalised = variance / Math.max(mean * mean * 0.1, 1e-8);
-    return Math.min(1, normalised);
+    // Threshold of 1e-3 only fires for genuine rhythmic bursts (laughter, clapping)
+    return Math.min(1, variance / 1e-3);
   }
 
   _smooth(key, value) {
