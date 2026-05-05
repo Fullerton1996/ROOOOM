@@ -3,11 +3,10 @@
   let currentMood = null;
   let player = null;
   let deviceId = null;
-  let accessToken = null;
-  let tokenFetchedAt = null;
   let config = null;
 
   const startBtn = document.getElementById('start-btn');
+  const spotifyBtn = document.getElementById('spotify-btn');
   const mainUI = document.getElementById('main-ui');
   const moodLabel = document.getElementById('mood-label');
   const pulse = document.getElementById('pulse');
@@ -15,36 +14,82 @@
   const endBtn = document.getElementById('end-btn');
   const connectionDot = document.getElementById('connection-dot');
 
-  async function getToken() {
-    const now = Date.now();
-    if (accessToken && tokenFetchedAt && now - tokenFetchedAt < 50 * 60 * 1000) {
-      return accessToken;
-    }
-    const res = await fetch('/api/token');
-    const data = await res.json();
-    accessToken = data.access_token;
-    tokenFetchedAt = now;
-    return accessToken;
+  // ── PKCE Auth ───────────────────────────────────────────────────────────────
+
+  async function generatePKCE() {
+    const verifier = Array.from(crypto.getRandomValues(new Uint8Array(48)))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    return { verifier, challenge };
   }
 
-  async function loadConfig() {
-    try {
-      const res = await fetch('/api/config');
-      config = await res.json();
-    } catch (e) {
-      console.warn('[app] config fetch failed', e);
-    }
+  async function startSpotifyLogin() {
+    if (!config) config = await fetch('/api/config').then(r => r.json());
+    const { verifier, challenge } = await generatePKCE();
+    const redirectUri = `${location.origin}/callback`;
+
+    sessionStorage.setItem('pkce_verifier', verifier);
+    sessionStorage.setItem('spotify_client_id', config.spotify_client_id);
+    sessionStorage.setItem('spotify_redirect_uri', redirectUri);
+
+    const scopes = [
+      'streaming', 'user-read-email', 'user-read-private',
+      'user-read-playback-state', 'user-modify-playback-state',
+      'playlist-modify-public', 'playlist-modify-private',
+    ].join(' ');
+
+    const params = new URLSearchParams({
+      client_id: config.spotify_client_id,
+      response_type: 'code',
+      redirect_uri: redirectUri,
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+      scope: scopes,
+    });
+
+    window.location = `https://accounts.spotify.com/authorize?${params}`;
   }
+
+  async function getToken() {
+    const expiresAt = parseInt(sessionStorage.getItem('spotify_token_expires_at') || '0');
+    if (Date.now() < expiresAt - 60000) {
+      return sessionStorage.getItem('spotify_access_token');
+    }
+    // Refresh using stored refresh token
+    const refreshToken = sessionStorage.getItem('spotify_refresh_token');
+    const clientId = sessionStorage.getItem('spotify_client_id');
+    if (!refreshToken || !clientId) return null;
+
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      sessionStorage.setItem('spotify_access_token', data.access_token);
+      sessionStorage.setItem('spotify_token_expires_at', Date.now() + data.expires_in * 1000);
+      if (data.refresh_token) sessionStorage.setItem('spotify_refresh_token', data.refresh_token);
+    }
+    return data.access_token || null;
+  }
+
+  function isLoggedIn() {
+    return !!sessionStorage.getItem('spotify_access_token');
+  }
+
+  // ── Playlist / Playback ─────────────────────────────────────────────────────
 
   function extractPlaylistId(uri) {
-    if (!uri) return null;
-    if (uri.startsWith('https://')) {
-      return uri.split('/playlist/')[1]?.split('?')[0] ?? null;
-    }
-    if (uri.startsWith('spotify:playlist:')) {
-      const id = uri.replace('spotify:playlist:', '');
-      return id === 'FILL_ME' ? null : id;
-    }
+    if (!uri || uri.includes('FILL_ME')) return null;
+    if (uri.startsWith('https://')) return uri.split('/playlist/')[1]?.split('?')[0] ?? null;
+    if (uri.startsWith('spotify:playlist:')) return uri.replace('spotify:playlist:', '');
     return null;
   }
 
@@ -60,12 +105,8 @@
   async function startPlaylist(playlistId) {
     if (!deviceId || !playlistId) return;
     const token = await getToken();
-    let tracks = [];
-    try {
-      tracks = await getPlaylistTracks(playlistId, token);
-    } catch (e) {
-      console.warn('[app] failed to fetch playlist tracks', e);
-    }
+    if (!token) return;
+    const tracks = await getPlaylistTracks(playlistId, token).catch(() => []);
     if (!tracks.length) return;
 
     const stored = sessionStorage.getItem(`idx_${playlistId}`);
@@ -73,15 +114,10 @@
     idx = idx % tracks.length;
     sessionStorage.setItem(`idx_${playlistId}`, (idx + 1) % tracks.length);
 
-    const uris = [
-      ...tracks.slice(idx).map(t => t.uri),
-      ...tracks.slice(0, idx).map(t => t.uri),
-    ];
-
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris }),
+      body: JSON.stringify({ uris: [...tracks.slice(idx), ...tracks.slice(0, idx)].map(t => t.uri) }),
     });
   }
 
@@ -99,18 +135,13 @@
 
   async function onMoodChange(mood) {
     currentMood = mood;
-
     moodLabel.classList.add('transitioning');
     await new Promise(r => setTimeout(r, 600));
     moodLabel.textContent = mood.replace(/_/g, ' ');
     moodLabel.classList.remove('transitioning');
 
-    const moodCfg = config?.moods?.[mood];
-    const playlistId = moodCfg ? extractPlaylistId(moodCfg.playlist_uri) : null;
-    if (!playlistId) {
-      console.log(`[app] no valid playlist for mood: ${mood}`);
-      return;
-    }
+    const playlistId = extractPlaylistId(config?.moods?.[mood]?.playlist_uri);
+    if (!playlistId) return;
 
     await fadeVolume(0, 8000);
     await startPlaylist(playlistId);
@@ -130,42 +161,43 @@
     });
   }
 
+  // ── Session End ─────────────────────────────────────────────────────────────
+
   async function endSession() {
     await fadeVolume(0, 4000);
     if (player) player.pause();
 
-    const phonesRaw = prompt('Enter guest phone numbers (comma-separated):') || '';
-    const emailsRaw = prompt('Enter guest emails (comma-separated):') || '';
+    const phonesRaw = prompt('Guest phone numbers (comma-separated, or leave blank):') || '';
+    const emailsRaw = prompt('Guest emails (comma-separated, or leave blank):') || '';
     const phones = phonesRaw.split(',').map(s => s.trim()).filter(Boolean);
     const emails = emailsRaw.split(',').map(s => s.trim()).filter(Boolean);
-
-    const sessionName = config?.session_name ||
-      `${(config?.name || 'Read the Room')} — ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+    const sessionName = `Read the Room — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    const token = await getToken();
 
     try {
       const res = await fetch('/api/session/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tracks: sessionTracks, session_name: sessionName, contacts: { phones, emails } }),
+        body: JSON.stringify({ tracks: sessionTracks, session_name: sessionName, contacts: { phones, emails }, access_token: token }),
       });
       const data = await res.json();
       if (data.playlist_url) {
         alert(`Playlist created: ${data.playlist_url}`);
         window.open(data.playlist_url, '_blank');
       } else {
-        alert(data.error || 'Session ended, but no playlist URL returned.');
+        alert(data.error || 'Session ended.');
       }
     } catch (e) {
-      alert(`Error ending session: ${e.message}`);
+      alert(`Error: ${e.message}`);
     }
   }
 
-  function initSpotifyPlayer(token) {
+  // ── Spotify Player ──────────────────────────────────────────────────────────
+
+  function initSpotifyPlayer() {
     player = new Spotify.Player({
       name: 'ROOOOM',
-      getOAuthToken: cb => {
-        getToken().then(cb);
-      },
+      getOAuthToken: cb => getToken().then(t => cb(t)),
       volume: 0.8,
     });
 
@@ -173,42 +205,27 @@
       deviceId = device_id;
       pulse.classList.remove('inactive');
       connectionDot.classList.add('connected');
-      console.log('[app] Spotify player ready, device:', device_id);
     });
 
-    player.addListener('not_ready', ({ device_id }) => {
+    player.addListener('not_ready', () => {
       deviceId = null;
       pulse.classList.add('inactive');
       connectionDot.classList.remove('connected');
-      console.warn('[app] Spotify player not ready, device:', device_id);
     });
 
-    player.addListener('player_state_changed', state => {
-      if (!state) return;
-      logTrack(state);
-    });
-
-    player.addListener('initialization_error', ({ message }) => {
-      console.error('[app] Spotify init error:', message);
-    });
-
-    player.addListener('authentication_error', ({ message }) => {
-      console.error('[app] Spotify auth error:', message);
-    });
-
-    player.addListener('account_error', ({ message }) => {
-      console.error('[app] Spotify account error:', message);
-    });
-
+    player.addListener('player_state_changed', state => { if (state) logTrack(state); });
+    player.addListener('initialization_error', ({ message }) => console.error('[spotify]', message));
+    player.addListener('authentication_error', ({ message }) => console.error('[spotify] auth:', message));
+    player.addListener('account_error', ({ message }) => console.error('[spotify] account:', message));
     player.connect();
   }
+
+  // ── Boot ────────────────────────────────────────────────────────────────────
 
   async function startSession() {
     startBtn.style.display = 'none';
     mainUI.style.display = 'block';
     moodLabel.textContent = '—';
-
-    await loadConfig();
 
     const analyzer = new AudioAnalyzer(vector => {
       vectorDebug.textContent =
@@ -217,9 +234,7 @@
       classifier.classify(vector);
     });
 
-    const classifier = new MoodClassifier(mood => {
-      onMoodChange(mood);
-    });
+    const classifier = new MoodClassifier(mood => onMoodChange(mood));
 
     try {
       await analyzer.start();
@@ -230,31 +245,33 @@
       return;
     }
 
-    try {
-      const token = await getToken();
-      initSpotifyPlayer(token);
-    } catch (e) {
-      console.error('[app] Failed to init Spotify player:', e);
+    initSpotifyPlayer();
+  }
+
+  window.onSpotifyWebPlaybackSDKReady = () => {};
+
+  async function boot() {
+    config = await fetch('/api/config').then(r => r.json()).catch(() => null);
+
+    if (isLoggedIn()) {
+      spotifyBtn.style.display = 'none';
+      startBtn.style.display = '';
+    } else {
+      startBtn.style.display = 'none';
+      spotifyBtn.style.display = '';
     }
   }
 
-  window.onSpotifyWebPlaybackSDKReady = () => {
-    console.log('[app] Spotify SDK ready');
-  };
-
+  spotifyBtn.addEventListener('click', startSpotifyLogin);
   startBtn.addEventListener('click', startSession);
   endBtn.addEventListener('click', endSession);
 
   window.roooom = {
-    play: () => player?.resume(),
     pause: () => player?.pause(),
     resume: () => player?.resume(),
     endSession,
-    getState: () => ({
-      currentMood,
-      sessionTracks: [...sessionTracks],
-      deviceId,
-      tokenAge: tokenFetchedAt ? Math.round((Date.now() - tokenFetchedAt) / 1000) + 's' : null,
-    }),
+    getState: () => ({ currentMood, sessionTracks: [...sessionTracks], deviceId }),
   };
+
+  boot();
 })();

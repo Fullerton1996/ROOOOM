@@ -7,6 +7,8 @@ class handler(BaseHTTPRequestHandler):
         root = os.path.join(os.path.dirname(__file__), '..')
         with open(os.path.join(root, 'moods.yaml')) as f:
             config = yaml.safe_load(f)
+        config['spotify_client_id'] = os.environ.get('SPOTIFY_CLIENT_ID', '')
+        config['spotify_redirect_uri'] = os.environ.get('SPOTIFY_REDIRECT_URI', '')
         body = json.dumps(config).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')

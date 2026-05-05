@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Connecting…</title>
+  <style>
+    body { background: #0a0a0a; color: #e0e0e0; font-family: -apple-system, sans-serif;
+           display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    p { font-weight: 300; letter-spacing: 0.08em; color: #555; }
+  </style>
+</head>
+<body>
+  <p>connecting…</p>
+  <script>
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const error = params.get('error');
+
+      if (error || !code) {
+        document.querySelector('p').textContent = 'Spotify login failed. Close this and try again.';
+        return;
+      }
+
+      const clientId = sessionStorage.getItem('spotify_client_id');
+      const redirectUri = sessionStorage.getItem('spotify_redirect_uri');
+      const verifier = sessionStorage.getItem('pkce_verifier');
+
+      try {
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            code_verifier: verifier,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error_description || data.error);
+
+        sessionStorage.setItem('spotify_access_token', data.access_token);
+        sessionStorage.setItem('spotify_refresh_token', data.refresh_token);
+        sessionStorage.setItem('spotify_token_expires_at', Date.now() + data.expires_in * 1000);
+
+        window.location = '/';
+      } catch (e) {
+        document.querySelector('p').textContent = `Auth failed: ${e.message}`;
+      }
+    })();
+  </script>
+</body>
+</html>

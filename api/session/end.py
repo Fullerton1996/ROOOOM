@@ -147,7 +147,7 @@ class handler(BaseHTTPRequestHandler):
         emails = [e.strip() for e in contacts.get('emails', []) if e.strip()]
 
         try:
-            token = _get_access_token()
+            token = body.get('access_token') or _get_access_token()
             playlist_url = _create_playlist(token, session_name, tracks)
         except Exception as e:
             error_body = json.dumps({'error': str(e)}).encode()
