@@ -13,6 +13,8 @@
   const vectorDebug = document.getElementById('vector-debug');
   const endBtn = document.getElementById('end-btn');
   const connectionDot = document.getElementById('connection-dot');
+  const skipToFadeBtn = document.getElementById('skip-to-fade-btn');
+  const skipBtn = document.getElementById('skip-btn');
 
   // ── PKCE Auth ───────────────────────────────────────────────────────────────
 
@@ -303,6 +305,23 @@
   spotifyBtn.addEventListener('click', startSpotifyLogin);
   startBtn.addEventListener('click', startSession);
   endBtn.addEventListener('click', endSession);
+
+  skipToFadeBtn.addEventListener('click', async () => {
+    if (!player) return;
+    const state = await player.getCurrentState();
+    if (!state) return;
+    // Seek to 20 seconds before the end
+    const seekTo = Math.max(0, state.duration - 20000);
+    await player.seek(seekTo);
+  });
+
+  skipBtn.addEventListener('click', async () => {
+    if (!player) return;
+    transitionInProgress = false; // allow the next transition to fire
+    const nextId = pendingPlaylistId || extractPlaylistId(config?.moods?.[currentMood]?.playlist_uri);
+    pendingPlaylistId = null;
+    if (nextId) await startPlaylist(nextId);
+  });
 
   window.roooom = {
     pause: () => player?.pause(),
