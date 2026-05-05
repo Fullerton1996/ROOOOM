@@ -201,10 +201,15 @@
       volume: 0.8,
     });
 
-    player.addListener('ready', ({ device_id }) => {
+    player.addListener('ready', async ({ device_id }) => {
       deviceId = device_id;
       pulse.classList.remove('inactive');
       connectionDot.classList.add('connected');
+      // Start arrival playlist immediately — don't wait for mood classifier
+      currentMood = 'arrival';
+      moodLabel.textContent = 'arrival';
+      const arrivalId = extractPlaylistId(config?.moods?.arrival?.playlist_uri);
+      if (arrivalId) await startPlaylist(arrivalId);
     });
 
     player.addListener('not_ready', () => {

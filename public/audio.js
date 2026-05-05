@@ -16,8 +16,9 @@ class AudioAnalyzer {
     this.context = new AudioContext();
     const source = this.context.createMediaStreamSource(stream);
     this.analyser = this.context.createAnalyser();
-    this.analyser.fftSize = 32768;
-    this.analyser.smoothingTimeConstant = 0;
+    // Smaller fftSize so the buffer fills quickly even in quiet rooms
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0.3;
     source.connect(this.analyser);
 
     setInterval(() => this._collectSubWindow(), 250);
@@ -37,7 +38,8 @@ class AudioAnalyzer {
     const rms = Math.sqrt(td.reduce((a, v) => a + v * v, 0) / td.length);
     if (rms < 1e-10) return 0;
     const db = 20 * Math.log10(rms);
-    return Math.min(1, Math.max(0, (db - (-40)) / ((-10) - (-40))));
+    // Wider range: -60dB (near silence) to -10dB (loud room)
+    return Math.min(1, Math.max(0, (db - (-60)) / ((-10) - (-60))));
   }
 
   _warmth(fd) {
@@ -54,7 +56,7 @@ class AudioAnalyzer {
   }
 
   _density(td) {
-    const frameSize = 512;
+    const frameSize = 256;
     const zcrs = [];
     for (let i = 0; i + frameSize < td.length; i += frameSize) {
       let c = 0;
@@ -70,10 +72,13 @@ class AudioAnalyzer {
   }
 
   _laughter() {
-    if (this.subWindows.length < 2) return 0;
+    if (this.subWindows.length < 4) return 0;
     const mean = this.subWindows.reduce((a, b) => a + b) / this.subWindows.length;
+    if (mean < 1e-6) return 0; // true silence — no laughter possible
     const variance = this.subWindows.reduce((a, v) => a + (v - mean) ** 2, 0) / this.subWindows.length;
-    return Math.min(1, variance / 0.005);
+    // Normalize relative to the signal level so quiet rooms still register bursts
+    const normalised = variance / Math.max(mean * mean * 0.1, 1e-8);
+    return Math.min(1, normalised);
   }
 
   _smooth(key, value) {
